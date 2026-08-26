@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LYWSD02 Widget
+Comment=Часы, температура и влажность с Xiaomi LYWSD02MMC
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
