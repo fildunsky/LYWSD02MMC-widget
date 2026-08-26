@@ -1,44 +1,44 @@
 # LYWSD02MMC-widget
 
-Ubuntu/GNOME tray widget for the Xiaomi LYWSD02MMC BLE e-ink clock: temperature, humidity, battery, comfort face and time sync. UI in Russian and English.
+[Русская версия](README.ru.md)
 
-Индикатор в трее Ubuntu (GNOME) для часов-гигрометра Xiaomi LYWSD02MMC. В панели — иконка (или сразу показания), по клику — меню с данными, считанными с устройства по Bluetooth LE:
+Ubuntu (GNOME) tray widget for the Xiaomi LYWSD02MMC clock-hygrometer. A tray icon (or live readings right in the panel); clicking it opens a menu with data read from the device over Bluetooth LE:
 
-- время на часах и его расхождение с системным
-- температура
-- влажность
-- комфорт — та же «мордочка», что на экране часов: довольная, когда температура и влажность в зоне комфорта, грустная с причиной (холодно/жарко/сухо/влажно), когда нет. Мордочку можно показывать эмодзи (🙂/🙁) или в точности как на экране часов: `(^_^)` и `(-‸-)` — у e-ink дисплея два варианта глаз (`^`/`-`) и рта (`_`/`‸`), других состояний нет
-- заряд батарейки
+- clock time and its drift from system time
+- temperature
+- humidity
+- comfort — the same "face" the clock shows on its screen: happy when temperature and humidity are inside the comfort zone, sad with a reason (cold/hot/dry/humid) when not. The face can be shown as emoji (🙂/🙁) or exactly like on the clock: `(^_^)` and `(-‸-)` — the e-ink display has two eye variants (`^`/`-`) and two mouth variants (`_`/`‸`), no other states exist
+- battery level
 
-Зона комфорта по умолчанию — 19–27 °C и 20–85 % влажности (заводские пороги устройств miaomiaoce; у LYWSD02 они зашиты в прошивку и по BLE не настраиваются, поэтому виджет повторяет логику на своей стороне). Пороги можно поменять в `~/.config/lywsd02-widget/config.json`, ключ `comfort`: `t_lo`, `t_hi`, `h_lo`, `h_hi`.
+The default comfort zone is 19–27 °C and 20–85 % humidity (factory thresholds of miaomiaoce devices; the LYWSD02 has them hardcoded in firmware with no BLE configuration, so the widget mirrors the logic on its side). Thresholds can be changed in `~/.config/lywsd02-widget/config.json`, key `comfort`: `t_lo`, `t_hi`, `h_lo`, `h_hi`.
 
-Опрос идёт раз в 10 минут (настраивается), пункт «Обновить сейчас» запрашивает данные немедленно.
+Polling runs every 10 minutes (configurable); the "Refresh now" item requests data immediately.
 
-## Поддерживаемые устройства
+## Supported devices
 
-Виджет работает с семейством e-ink часов-гигрометров производства Miaomiaoce (miaomiaoce.com), продающихся под брендами Xiaomi / Mijia. Официальные названия одной и той же железки в разных регионах:
+The widget works with the family of e-ink clock-hygrometers made by Miaomiaoce (miaomiaoce.com) and sold under the Xiaomi / Mijia brands. Official names of the same hardware in different regions:
 
-| Модель | Официальное название |
+| Model | Official name |
 |---|---|
-| LYWSD02MMC | Xiaomi Temperature and Humidity Monitor Clock (глобальная версия, BHR5435GL); 米家电子温湿度计Pro (Китай) |
-| LYWSD02 | Mijia Temperature and Humidity Electronic Watch — первое поколение, тот же протокол |
-| MHO-C303 | Miaomiaoce Smart Clock — клон с будильником от того же производителя, тот же протокол |
+| LYWSD02MMC | Xiaomi Temperature and Humidity Monitor Clock (global, BHR5435GL); 米家电子温湿度计Pro (China) |
+| LYWSD02 | Mijia Temperature and Humidity Electronic Watch — first generation, same protocol |
+| MHO-C303 | Miaomiaoce Smart Clock — alarm-clock sibling by the same manufacturer, same protocol |
 
-Та же железка продаётся на Западе под именем Adafruit «Bluetooth eInk Display Clock with Temperature Humidity Sensor» (Adafruit 5023). Встроенный поиск находит устройства с именами `LYWSD02*` и `MHO-C303`.
+The same hardware is sold in the West as the Adafruit "Bluetooth eInk Display Clock with Temperature Humidity Sensor" (Adafruit 5023). Built-in discovery finds devices named `LYWSD02*` and `MHO-C303`.
 
-## Установка
+## Installation
 
-### Из пакета (рекомендуется)
+### From the package (recommended)
 
-Скачайте `.deb` со [страницы релизов](../../releases) и установите — зависимости подтянутся из репозиториев Ubuntu автоматически:
+Download the `.deb` from the [releases page](../../releases) and install it — dependencies are pulled from the Ubuntu repositories automatically:
 
 ```sh
 sudo apt install ./lywsd02-widget_*_all.deb
 ```
 
-Запустите «LYWSD02 Widget» из меню приложений, откройте «Настройки», найдите свои часы кнопкой поиска и при желании включите автозапуск.
+Launch "LYWSD02 Widget" from the application grid, open Settings, find your clock with the scan button and optionally enable autostart.
 
-### Из исходников
+### From source
 
 ```sh
 git clone https://github.com/fildunsky/LYWSD02MMC-widget.git
@@ -47,46 +47,46 @@ cd LYWSD02MMC-widget
 ./run.sh
 ```
 
-Скрипт создаёт виртуальное окружение `.venv` с [bleak](https://github.com/hbldh/bleak), при отсутствии `gir1.2-ayatanaappindicator3-0.1` добывает typelib через `apt-get download` (без root) и прописывает ярлык в меню приложений и автозапуск.
+The script creates a `.venv` with [bleak](https://github.com/hbldh/bleak), fetches the `gir1.2-ayatanaappindicator3-0.1` typelib via `apt-get download` when the package is missing (no root needed) and installs the application menu entry and autostart.
 
-Сборка `.deb`: `./package/build-deb.sh [версия]` — результат в `dist/`.
+Building the `.deb`: `./package/build-deb.sh [version]` — output goes to `dist/`.
 
-## Требования
+## Requirements
 
-- Ubuntu с GNOME и включённым расширением `ubuntu-appindicators` (включено из коробки)
-- Bluetooth-адаптер с BLE
+- Ubuntu with GNOME and the `ubuntu-appindicators` extension enabled (on by default)
+- A Bluetooth adapter with BLE
 
-## Настройки
+## Settings
 
-Пункт меню «Настройки» открывает окно:
+The Settings menu item opens a window:
 
-- **Язык** — русский или английский, применяется сразу
-- **Часы** — кнопка с текущим MAC открывает поиск: виджет сканирует эфир и показывает найденные устройства с адресом и уровнем сигнала (свои часы обычно ближе — сигнал сильнее); клик по строке выбирает устройство и сразу его опрашивает
-- **Опрос, мин** — период опроса часов
-- **Часовой пояс** — «Системный» или фиксированный офсет в формате «(UTC+03:00) Москва, Стамбул, Эр-Рияд»: список с поиском по городу и офсету, включая дробные пояса (Индия +05:30, Непал +05:45, Иран +03:30 и т.д.); записывается в часы при синхронизации
-- **Мордочка** — эмодзи или текстовая, как на часах
-- **В трее** — что показывать в панели: «иконка», «данные» (`23.8°, 49%`), «данные + мордашка» (`23.8°, 49% (^_^)`), «мордашка», «температура» или «влажность»
-- **Автозапуск при входе** — включает/убирает ярлык в `~/.config/autostart`
-- **Автосинхронизация времени** — при каждом опросе, если часы разошлись с системой больше чем на 10 секунд или пояс не совпадает (включена по умолчанию)
-- **Синхронизировать время сейчас** — принудительная запись системного времени в часы
+- **Language** — Russian or English, applied instantly
+- **Device** — the button with the current MAC opens discovery: the widget scans the air and lists found devices with address and signal level (your clock is usually the closest one — stronger signal); clicking a row selects the device and polls it right away
+- **Poll, min** — polling period
+- **Time zone** — "System" or a fixed offset in the "(UTC+03:00) Moscow, Istanbul, Riyadh" format: a list searchable by city and offset, including fractional zones (India +05:30, Nepal +05:45, Iran +03:30 etc.); written to the clock on sync
+- **Face** — emoji or text, like on the clock
+- **Tray** — what to show in the panel: icon, data (`23.8°, 49%`), data + face (`23.8°, 49% (^_^)`), face, temperature or humidity
+- **Start at login** — adds/removes the entry in `~/.config/autostart`
+- **Auto time sync** — on every poll, when the clock drifts from the system by more than 10 seconds or the timezone differs (enabled by default)
+- **Sync time now** — force-writes system time to the clock
 
-Настройки хранятся в `~/.config/lywsd02-widget/config.json`. Переменные окружения `LYWSD02_MAC` и `LYWSD02_POLL` работают как фолбэк, если в конфиге значений нет.
+Settings are stored in `~/.config/lywsd02-widget/config.json`. The `LYWSD02_MAC` and `LYWSD02_POLL` environment variables work as fallbacks when the config has no values.
 
-## Протокол
+## Protocol
 
-Стандартные GATT-характеристики LYWSD02 (сервис `EBE0CCB0-...`):
+Standard LYWSD02 GATT characteristics (service `EBE0CCB0-...`):
 
-| UUID | Данные |
+| UUID | Data |
 |---|---|
-| `EBE0CCB7-7A0A-4B0C-8A1A-6FF2997DA3A6` | время: uint32 LE (unix) + int8 смещение пояса |
-| `EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6` | notify: int16 LE температура ×0.01 °C + uint8 влажность % |
-| `EBE0CCC4-7A0A-4B0C-8A1A-6FF2997DA3A6` | uint8 заряд батарейки % |
+| `EBE0CCB7-7A0A-4B0C-8A1A-6FF2997DA3A6` | time: uint32 LE (unix) + int8 timezone offset |
+| `EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6` | notify: int16 LE temperature ×0.01 °C + uint8 humidity % |
+| `EBE0CCC4-7A0A-4B0C-8A1A-6FF2997DA3A6` | uint8 battery % |
 
-Прошивка часов хранит пояс одним байтом в целых часах, поэтому «из коробки» дробные пояса они показывать не умеют. Виджет обходит это так: в байт пишется пояс, округлённый вниз до часа, а остаток (30/45 минут) прибавляется к записываемому epoch — на экране получается правильное местное время.
+The firmware stores the timezone as a single byte in whole hours, so out of the box the clock cannot display fractional zones. The widget works around it: the byte gets the offset rounded down to the whole hour, and the remainder (30/45 minutes) is added to the epoch being written — the display ends up showing correct local time.
 
-## Удаление
+## Uninstall
 
-Пакет: `sudo apt remove lywsd02-widget`. Исходники:
+Package: `sudo apt remove lywsd02-widget`. Source install:
 
 ```sh
 rm ~/.config/autostart/lywsd02-widget.desktop ~/.local/share/applications/lywsd02-widget.desktop
