@@ -13,7 +13,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: intel
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,7 +34,7 @@ jobs:
       - run: |
           plutil -replace NSBluetoothAlwaysUsageDescription -string "Reads temperature, humidity and time from the LYWSD02 clock over Bluetooth" dist/lywsd02-widget.app/Contents/Info.plist
           plutil -replace LSUIElement -bool true dist/lywsd02-widget.app/Contents/Info.plist
-      - run: ditto -c -k --keepParent dist/lywsd02-widget.app lywsd02-widget-macos-arm64.zip
-      - run: gh release upload ${{ inputs.release_tag }} lywsd02-widget-macos-arm64.zip --clobber
+      - run: ditto -c -k --keepParent dist/lywsd02-widget.app lywsd02-widget-macos-${{ matrix.arch }}.zip
+      - run: gh release upload ${{ inputs.release_tag }} lywsd02-widget-macos-${{ matrix.arch }}.zip --clobber
         env:
           GH_TOKEN: ${{ github.token }}
