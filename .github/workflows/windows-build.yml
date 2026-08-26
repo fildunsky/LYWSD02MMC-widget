@@ -1,0 +1,27 @@
+name: windows-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to attach the exe to
+        default: v1.0.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install bleak pystray pillow pyinstaller
+      - run: python -c "import sys; sys.path.insert(0, 'win'); from lywsd02_widget_win import make_image; make_image('icon', 256).save('icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(256,256)])"
+      - run: pyinstaller --onefile --noconsole --name lywsd02-widget --icon icon.ico win/lywsd02_widget_win.py
+      - run: gh release upload ${{ inputs.release_tag }} dist/lywsd02-widget.exe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

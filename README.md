@@ -51,6 +51,10 @@ The script creates a `.venv` with [bleak](https://github.com/hbldh/bleak), fetch
 
 Building the `.deb`: `./package/build-deb.sh [version]` — output goes to `dist/`.
 
+### Windows
+
+Download `lywsd02-widget.exe` from the [releases page](../../releases) and run it — no installation needed (Windows 10+ with a BLE adapter). Windows tray icons are square, so the tray shows the icon, the face, the temperature or the humidity, while full readings live in the tooltip and the menu. Settings, device discovery, time sync and autostart (registry Run key) work the same as on Linux; config lives in `%APPDATA%\lywsd02-widget\config.json`. SmartScreen may warn about the unsigned binary — choose "More info → Run anyway". The exe is built in CI by the `windows-build` workflow from `win/lywsd02_widget_win.py`.
+
 ## Requirements
 
 - Ubuntu with GNOME and the `ubuntu-appindicators` extension enabled (on by default)
