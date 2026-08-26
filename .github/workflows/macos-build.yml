@@ -1,0 +1,32 @@
+name: macos-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to attach the app to
+        default: v1.0.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install bleak rumps pillow pyinstaller
+      - run: |
+          python -c "import sys; sys.path.insert(0, 'mac'); from lywsd02_widget_mac import make_image; make_image('icon', 512, color=(90, 90, 90, 255)).save('icon.icns')"
+      - run: pyinstaller --windowed --name lywsd02-widget --icon icon.icns --osx-bundle-identifier org.lywsd02.widget mac/lywsd02_widget_mac.py
+      - run: |
+          plutil -replace NSBluetoothAlwaysUsageDescription -string "Reads temperature, humidity and time from the LYWSD02 clock over Bluetooth" dist/lywsd02-widget.app/Contents/Info.plist
+          plutil -replace LSUIElement -bool true dist/lywsd02-widget.app/Contents/Info.plist
+      - run: ditto -c -k --keepParent dist/lywsd02-widget.app lywsd02-widget-macos-arm64.zip
+      - run: gh release upload ${{ inputs.release_tag }} lywsd02-widget-macos-arm64.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -51,6 +51,10 @@ The script creates a `.venv` with [bleak](https://github.com/hbldh/bleak), fetch
 
 Building the `.deb`: `./package/build-deb.sh [version]` — output goes to `dist/`.
 
+### macOS
+
+Download `lywsd02-widget-macos-arm64.zip` from the [releases page](../../releases) (Apple Silicon; Intel Macs can run the script from source: `pip install bleak rumps pillow && python3 mac/lywsd02_widget_mac.py`), unzip and launch. The app is unsigned, so the first launch is right-click → Open, and macOS will ask for Bluetooth permission. It lives in the menu bar: the menu bar slot can show the icon or live text — all six display modes work, including `23.8°, 48% 🙂`. Settings are submenus of the dropdown (macOS style); autostart is a LaunchAgent; config lives in `~/Library/Application Support/lywsd02-widget/config.json`. Note: macOS hides Bluetooth MAC addresses, so devices are identified by system UUIDs — use the built-in scan to pick your clock.
+
 ### Windows
 
 Download `lywsd02-widget.exe` from the [releases page](../../releases) and run it — no installation needed (Windows 10+ with a BLE adapter). Windows tray icons are square, so the tray shows the icon, the face, the temperature or the humidity, while full readings live in the tooltip and the menu. Settings, device discovery, time sync and autostart (registry Run key) work the same as on Linux; config lives in `%APPDATA%\lywsd02-widget\config.json`. SmartScreen may warn about the unsigned binary — choose "More info → Run anyway". The exe is built in CI by the `windows-build` workflow from `win/lywsd02_widget_win.py`.
