@@ -6,8 +6,11 @@ import shutil
 import signal
 import struct
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from xml.sax.saxutils import escape
+
+from PIL import Image, ImageDraw, ImageFont
 
 import gi
 
@@ -54,7 +57,7 @@ STRINGS = {
         "tz_system": "Системный",
         "autostart": "Автозапуск при входе",
         "autosync": "Автосинхронизация времени",
-        "sync_now": "Синхронизировать время сейчас",
+        "sync_now": "Синхронизировать",
         "sync_requested": "Запрошено, результат появится в меню",
         "search": "Поиск",
         "mood": "Комфорт",
@@ -99,7 +102,7 @@ STRINGS = {
         "tz_system": "System",
         "autostart": "Start at login",
         "autosync": "Auto time sync",
-        "sync_now": "Sync time now",
+        "sync_now": "Sync",
         "sync_requested": "Requested, result will appear in the menu",
         "search": "Search",
         "mood": "Comfort",
@@ -163,6 +166,204 @@ def measure_text(text):
         return layout.get_pixel_size().width
     except Exception:
         return int(len(text) * 8)
+
+
+SEG_MAP = {
+    "0": "abcdef",
+    "1": "bc",
+    "2": "abged",
+    "3": "abgcd",
+    "4": "fgbc",
+    "5": "afgcd",
+    "6": "afgedc",
+    "7": "abc",
+    "8": "abcdefg",
+    "9": "abfgcd",
+    "-": "g",
+}
+
+INK = (25, 25, 23, 255)
+BODY_WHITE = (255, 255, 255, 255)
+FRAME_GRAY = (218, 222, 221, 255)
+SCREEN_GRAY = (205, 210, 207, 255)
+
+
+def draw_7seg(dr, x, y, w, h, ch, t):
+    on = SEG_MAP.get(ch, "")
+    seam = t * 0.12
+    cut = t * 0.22
+    jg = t * 0.11
+    taper = t * 0.65
+    ft = t * 0.16
+    hh = h / 2
+    vtop = y + hh - jg
+    vbot = y + hh + jg
+    vy0 = y + seam
+    vy1 = y + h - seam
+    if "a" in on:
+        dr.polygon(
+            [(x + cut, y), (x + w - cut, y), (x + w - t, y + t), (x + t, y + t)], fill=INK
+        )
+    if "d" in on:
+        dr.polygon(
+            [(x + t, y + h - t), (x + w - t, y + h - t), (x + w - cut, y + h), (x + cut, y + h)],
+            fill=INK,
+        )
+    if "g" in on:
+        gm = t * 0.4
+        gt = t * 0.5
+        gy = y + hh - t / 2
+        gx = x + gm
+        ln = w - 2 * gm
+        dr.polygon(
+            [
+                (gx + gt, gy),
+                (gx + ln - gt, gy),
+                (gx + ln, gy + t / 2),
+                (gx + ln - gt, gy + t),
+                (gx + gt, gy + t),
+                (gx, gy + t / 2),
+            ],
+            fill=INK,
+        )
+    if "f" in on:
+        dr.polygon(
+            [
+                (x, vy0),
+                (x + t, vy0 + t),
+                (x + t, vtop - taper),
+                (x + t / 2 + ft, vtop),
+                (x + t / 2 - ft, vtop),
+                (x, vtop - taper),
+            ],
+            fill=INK,
+        )
+    if "b" in on:
+        dr.polygon(
+            [
+                (x + w, vy0),
+                (x + w, vtop - taper),
+                (x + w - t / 2 + ft, vtop),
+                (x + w - t / 2 - ft, vtop),
+                (x + w - t, vtop - taper),
+                (x + w - t, vy0 + t),
+            ],
+            fill=INK,
+        )
+    if "e" in on:
+        dr.polygon(
+            [
+                (x, vy1),
+                (x, vbot + taper),
+                (x + t / 2 - ft, vbot),
+                (x + t / 2 + ft, vbot),
+                (x + t, vbot + taper),
+                (x + t, vy1 - t),
+            ],
+            fill=INK,
+        )
+    if "c" in on:
+        dr.polygon(
+            [
+                (x + w, vy1),
+                (x + w - t, vy1 - t),
+                (x + w - t, vbot + taper),
+                (x + w - t / 2 - ft, vbot),
+                (x + w - t / 2 + ft, vbot),
+                (x + w, vbot + taper),
+            ],
+            fill=INK,
+        )
+
+
+def draw_seg_number(dr, x, y, text, w, h, t, gap, colon_slot=None):
+    for ch in text:
+        if ch == ":":
+            slot = colon_slot or (t * 3)
+            x -= gap
+            dt = t * 0.65
+            cx = x + (slot - dt) * 0.5
+            dr.rectangle([cx, y + h * 0.312, cx + dt, y + h * 0.312 + dt], fill=INK)
+            dr.rectangle([cx, y + h * 0.628, cx + dt, y + h * 0.628 + dt], fill=INK)
+            x += slot
+        elif ch == ".":
+            dr.rectangle([x, y + h - t, x + t, y + h], fill=INK)
+            x += t + gap
+        else:
+            draw_7seg(dr, x, y, w, h, ch, t)
+            x += w + gap
+    return x
+
+
+def draw_screen_face(dr, x, y, h, lw, happy):
+    def ln(points):
+        dr.line(points, fill=INK, width=int(lw), joint="curve")
+        r = lw / 2 - 0.5
+        for px, py in (points[0], points[-1]):
+            dr.ellipse([px - r, py - r, px + r, py + r], fill=INK)
+
+    w = h * 2.55
+    pw = h * 0.75
+    dr.arc([x, y - h * 0.1, x + pw, y + h * 1.1], 130, 230, fill=INK, width=int(lw))
+    dr.arc([x + w - pw, y - h * 0.1, x + w, y + h * 1.1], 310, 50, fill=INK, width=int(lw))
+    ew = w * 0.20
+    eh = h * 0.26
+    ey = y + h * 0.08
+    e1 = x + w * 0.20
+    e2 = x + w * 0.64
+    my = y + h * 0.88
+    m1 = x + w * 0.38
+    m2 = x + w * 0.58
+    if happy:
+        ln([(e1, ey + eh), (e1 + ew / 2, ey), (e1 + ew, ey + eh)])
+        ln([(e2, ey + eh), (e2 + ew / 2, ey), (e2 + ew, ey + eh)])
+        dr.rounded_rectangle([m1, my - lw / 2, m2, my + lw / 2], radius=lw / 2, fill=INK)
+    else:
+        eyc = ey + eh * 0.6
+        ln([(e1, eyc), (e1 + ew, eyc)])
+        ln([(e2, eyc), (e2 + ew, eyc)])
+        ln([(m1, my), ((m1 + m2) / 2, my - eh), (m2, my)])
+
+
+def load_pil_font(size):
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def render_clock_face(path, time_text, humi_text, temp_text, happy, out_w=440):
+    s = 3
+    W, H = 480 * s, 238 * s
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    dr.rounded_rectangle([0, 0, W - 1, H - 1], radius=23 * s, fill=BODY_WHITE)
+    dr.rounded_rectangle([10 * s, 10 * s, W - 10 * s, H - 10 * s], radius=17 * s, fill=FRAME_GRAY)
+    dr.rounded_rectangle([48 * s, 48 * s, 432 * s, 189 * s], radius=4 * s, fill=SCREEN_GRAY)
+
+    draw_seg_number(dr, 78 * s, 56 * s, time_text, 54 * s, 94 * s, 9 * s, 23 * s, colon_slot=48 * s)
+
+    sw, sh, st, sg = 11.5 * s, 21 * s, 2.5 * s, 3 * s
+    by = 161 * s
+    x = draw_seg_number(dr, 180.5 * s, by, humi_text, sw, sh, st, sg)
+    dr.text((x + 1 * s, by + 13 * s), "%", font=load_pil_font(int(9 * s)), fill=INK)
+
+    x = draw_seg_number(dr, 262 * s, by, temp_text, sw, sh, st, sg)
+    dr.ellipse(
+        [x + 2.5 * s, by + 15.5 * s, x + 5.3 * s, by + 18.3 * s], outline=INK, width=int(1.1 * s)
+    )
+    dr.text((x + 6.5 * s, by + 14.5 * s), "C", font=load_pil_font(int(7 * s)), fill=INK)
+
+    if happy is not None:
+        draw_screen_face(dr, 333 * s, by, 21 * s, 2.5 * s, happy)
+
+    img = img.resize((out_w, H * out_w // W), Image.LANCZOS)
+    img.save(path)
 
 
 CLOCK_GLYPH = (
@@ -474,8 +675,16 @@ class SettingsWindow(Gtk.Window):
         self.app = app
         self.set_resizable(False)
         self.set_border_width(12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.add(box)
+        self.clock_path = os.path.join(ICON_DIR, "clockface.png")
+        self.clock_image = Gtk.Image()
+        box.pack_start(self.clock_image, False, False, 0)
+        self.update_clock()
+        self._clock_timer = GLib.timeout_add_seconds(1, self.update_clock)
+        self.connect("destroy", self.on_window_destroy)
         grid = Gtk.Grid(row_spacing=8, column_spacing=12)
-        self.add(grid)
+        box.pack_start(grid, True, True, 0)
 
         lang_combo = Gtk.ComboBoxText()
         lang_combo.append("ru", "Русский")
@@ -518,15 +727,28 @@ class SettingsWindow(Gtk.Window):
         grid.attach(Gtk.Label(label=L("poll"), xalign=0), 0, 5, 1, 1)
         grid.attach(poll_spin, 1, 5, 1, 1)
 
+        for combo in (lang_combo, face_combo, tray_combo):
+            for cell in combo.get_cells():
+                cell.set_property("xalign", 0)
+        css = Gtk.CssProvider()
+        css.load_from_data(b"button { padding-left: 8px; }")
+        for btn in (self.tz_button, self.device_button):
+            child = btn.get_child()
+            if child:
+                child.set_halign(Gtk.Align.START)
+            btn.get_style_context().add_provider(
+                css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+
         autostart_check = Gtk.CheckButton(label=L("autostart"))
         autostart_check.set_active(autostart_enabled())
         autostart_check.connect("toggled", self.on_autostart)
-        grid.attach(autostart_check, 0, 6, 2, 1)
+        grid.attach(autostart_check, 1, 6, 1, 1)
 
         autosync_check = Gtk.CheckButton(label=L("autosync"))
         autosync_check.set_active(bool(config.get("autosync")))
         autosync_check.connect("toggled", self.on_autosync)
-        grid.attach(autosync_check, 0, 7, 2, 1)
+        grid.attach(autosync_check, 1, 7, 1, 1)
 
         sync_btn = Gtk.Button(label=L("sync_now"))
         sync_btn.connect("clicked", self.on_sync)
@@ -544,6 +766,33 @@ class SettingsWindow(Gtk.Window):
             self.app.retranslate()
             self.destroy()
             self.app.on_settings(None)
+
+    def update_clock(self):
+        try:
+            d = self.app.last_data
+            if d and "temp" in d:
+                watch = datetime.fromtimestamp(
+                    self.app.watch_epoch(), timezone(timedelta(hours=d["tz"]))
+                )
+                render_clock_face(
+                    self.clock_path,
+                    watch.strftime("%H:%M"),
+                    str(d["humi"]),
+                    f"{d['temp']:.1f}",
+                    self.app.comfort_ok,
+                    out_w=220,
+                )
+            else:
+                render_clock_face(self.clock_path, "--:--", "--", "--.-", None, out_w=220)
+            self.clock_image.set_from_file(self.clock_path)
+        except Exception:
+            pass
+        return True
+
+    def on_window_destroy(self, *_):
+        if self._clock_timer:
+            GLib.source_remove(self._clock_timer)
+            self._clock_timer = None
 
     def tz_button_label(self):
         value = config.get("tz", "system")
@@ -755,12 +1004,26 @@ class Widget:
         self.retranslate()
         self.menu.show_all()
         self.indicator.set_menu(self.menu)
+        self.indicator.set_secondary_activate_target(self.settings_item)
 
         self.wake = threading.Event()
         self.sync_flag = False
         self.stop = False
         self.worker = threading.Thread(target=self.worker_loop, daemon=True)
         self.worker.start()
+        GLib.timeout_add_seconds(1, self.on_tick)
+
+    def on_tick(self):
+        d = self.last_data
+        if d:
+            try:
+                watch = datetime.fromtimestamp(
+                    self.watch_epoch(), timezone(timedelta(hours=d["tz"]))
+                )
+                self.rows["time"].set_label(f"{L('time')}: {watch.strftime('%H:%M:%S')}")
+            except Exception:
+                pass
+        return True
 
     def worker_loop(self):
         while not self.stop:
@@ -778,11 +1041,18 @@ class Widget:
             self.wake.wait(poll_seconds())
             self.wake.clear()
 
+    def watch_epoch(self):
+        d = self.last_data
+        epoch = d["epoch"]
+        if "at" in d:
+            epoch += int(time.monotonic() - d["at"])
+        return epoch
+
     def render(self):
         d = self.last_data
         if d:
             tzinfo = timezone(timedelta(hours=d["tz"]))
-            watch = datetime.fromtimestamp(d["epoch"], tzinfo)
+            watch = datetime.fromtimestamp(self.watch_epoch(), tzinfo)
             self.rows["time"].set_label(f"{L('time')}: {watch.strftime('%H:%M:%S')}")
             self.rows["drift"].set_label(f"{L('drift')}: {d['drift']:+d} {L('sec')}")
             if "temp" in d:
@@ -866,6 +1136,7 @@ class Widget:
 
     def apply_data(self, data):
         stamp = datetime.now().strftime("%H:%M:%S")
+        data["at"] = time.monotonic()
         self.last_data = data
         self.last_status = ("ok", stamp, data.get("synced", False))
         self.render()
@@ -913,6 +1184,8 @@ class Widget:
 
 
 def main():
+    GLib.set_prgname("lywsd02-widget")
+    GLib.set_application_name("LYWSD02 Widget")
     widget = Widget()
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     Gtk.main()

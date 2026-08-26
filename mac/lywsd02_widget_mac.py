@@ -8,7 +8,12 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 import rumps
-from PIL import Image, ImageDraw
+
+try:
+    from PIL import Image, ImageDraw
+except ImportError:
+    Image = ImageDraw = None
+
 from bleak import BleakClient, BleakScanner
 
 SYNC_THRESHOLD = 10
@@ -402,10 +407,19 @@ def make_image(kind, size=64, happy=True, color=(0, 0, 0, 255)):
 
 
 def menubar_icon_path():
-    os.makedirs(APP_SUPPORT, exist_ok=True)
-    path = os.path.join(APP_SUPPORT, "menubar.png")
-    make_image("icon", 44).save(path)
-    return path
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    bundled = os.path.join(base, "menubar.png")
+    if os.path.exists(bundled):
+        return bundled
+    if Image is None:
+        return None
+    try:
+        os.makedirs(APP_SUPPORT, exist_ok=True)
+        path = os.path.join(APP_SUPPORT, "menubar.png")
+        make_image("icon", 44).save(path)
+        return path
+    except Exception:
+        return None
 
 
 class TrayApp(rumps.App):
@@ -688,8 +702,12 @@ class TrayApp(rumps.App):
         if mode not in TRAY_MODES:
             mode = "icon"
         if mode == "icon" or not d or "temp" not in d:
-            self.icon = self.icon_file
-            self.title = None
+            if self.icon_file:
+                self.icon = self.icon_file
+                self.title = None
+            else:
+                self.icon = None
+                self.title = "LYWSD02"
             return
         temp = f"{d['temp']:.1f}°"
         humi = f"{d['humi']}%"

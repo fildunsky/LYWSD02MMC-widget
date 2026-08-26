@@ -20,7 +20,7 @@ Polling runs every 10 minutes (configurable); the "Refresh now" item requests da
 
 | | Linux | Windows | macOS |
 |---|---|---|---|
-| Package | `.deb` | portable `.exe` | `.app` in zip (Apple Silicon) |
+| Package | `.deb` | portable `.exe` | universal `.app` in zip |
 | Tray / menu bar | icon or live text | square icon; full readings in tooltip and menu | icon or live text, color emoji included |
 | Settings | window | window | submenus of the dropdown |
 | Autostart | `~/.config/autostart` | registry Run key | LaunchAgent |
@@ -56,11 +56,7 @@ Download `lywsd02-widget.exe` and run it — no installation needed. SmartScreen
 
 ### macOS
 
-Download `lywsd02-widget-macos-arm64.zip` (Apple Silicon), unzip and launch with right-click → Open (the app is unsigned), then allow Bluetooth access. On Intel Macs run from source:
-
-```sh
-pip3 install bleak rumps pillow && python3 mac/lywsd02_widget_mac.py
-```
+Download `lywsd02-widget-macos-universal.zip` (a universal build for both Apple Silicon and Intel, macOS 11+), unzip and launch with right-click → Open (the app is unsigned), then allow Bluetooth access.
 
 ### From source (Linux)
 

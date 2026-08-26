@@ -20,7 +20,7 @@
 
 | | Linux | Windows | macOS |
 |---|---|---|---|
-| Пакет | `.deb` | портативный `.exe` | `.app` в zip (Apple Silicon) |
+| Пакет | `.deb` | портативный `.exe` | универсальный `.app` в zip |
 | Трей / строка меню | иконка или живой текст | квадратная иконка; полные показания в подсказке и меню | иконка или живой текст, включая цветные эмодзи |
 | Настройки | окно | окно | подменю выпадашки |
 | Автозапуск | `~/.config/autostart` | ключ Run в реестре | LaunchAgent |
@@ -56,11 +56,7 @@ sudo apt install ./lywsd02-widget_*_all.deb
 
 ### macOS
 
-Скачайте `lywsd02-widget-macos-arm64.zip` (Apple Silicon), распакуйте и запустите через правый клик → «Открыть» (приложение не подписано), затем разрешите доступ к Bluetooth. На Intel-маках — из исходников:
-
-```sh
-pip3 install bleak rumps pillow && python3 mac/lywsd02_widget_mac.py
-```
+Скачайте `lywsd02-widget-macos-universal.zip` (универсальная сборка для Apple Silicon и Intel, macOS 11+), распакуйте и запустите через правый клик → «Открыть» (приложение не подписано), затем разрешите доступ к Bluetooth.
 
 ### Из исходников (Linux)
 

@@ -3,7 +3,7 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
 python3 -m venv --system-site-packages "$DIR/.venv"
-"$DIR/.venv/bin/pip" -q install bleak
+"$DIR/.venv/bin/pip" -q install bleak pillow
 
 if ! python3 -c "import gi; gi.require_version('AyatanaAppIndicator3','0.1')" 2>/dev/null; then
     mkdir -p "$DIR/vendor"

@@ -29,7 +29,7 @@ Maintainer: fildunsky <filipp.dunsky@gmail.com>
 Section: utils
 Priority: optional
 Architecture: all
-Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, python3-bleak, bluez
+Depends: python3, python3-gi, gir1.2-gtk-3.0, gir1.2-ayatanaappindicator3-0.1, python3-bleak, python3-pil, bluez
 Description: Tray widget for the Xiaomi LYWSD02MMC BLE clock
  Shows time, temperature, humidity, battery and the comfort face
  from the Xiaomi LYWSD02MMC e-ink clock in the Ubuntu/GNOME tray.
