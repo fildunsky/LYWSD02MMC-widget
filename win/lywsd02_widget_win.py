@@ -18,6 +18,7 @@ DEVICE_NAMES = ("LYWSD02", "MHO-C303")
 UUID_TIME = "EBE0CCB7-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_DATA = "EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_BATT = "EBE0CCC4-7A0A-4B0C-8A1A-6FF2997DA3A6"
+UUID_UNITS = "EBE0CCBE-7A0A-4B0C-8A1A-6FF2997DA3A6"
 CONFIG_PATH = os.path.join(
     os.environ.get("APPDATA", os.path.expanduser("~")), "lywsd02-widget", "config.json"
 )
@@ -62,6 +63,7 @@ STRINGS = {
         "scan_none": "Ничего не найдено. Поднесите часы ближе и попробуйте ещё раз",
         "scan_found": "Найдено",
         "poll": "Опрос, мин",
+        "unit": "Единицы",
         "tray_mode": "В трее",
         "tray_icon": "иконка",
         "tray_face": "мордашка",
@@ -105,6 +107,7 @@ STRINGS = {
         "scan_none": "Nothing found. Bring the clock closer and try again",
         "scan_found": "Found",
         "poll": "Poll, min",
+        "unit": "Units",
         "tray_mode": "Tray",
         "tray_icon": "icon",
         "tray_face": "face",
@@ -229,6 +232,7 @@ DEFAULTS = {
     "autosync": True,
     "face": "emoji",
     "tray": "icon",
+    "unit": "c",
     "comfort": {"t_lo": 19.0, "t_hi": 27.0, "h_lo": 20.0, "h_hi": 85.0},
 }
 
@@ -315,6 +319,14 @@ def face_glyph(happy):
     return FACES["happy" if happy else "sad"][style]
 
 
+def display_temp(celsius):
+    return celsius * 9 / 5 + 32 if config.get("unit") == "f" else celsius
+
+
+def unit_letter():
+    return "F" if config.get("unit") == "f" else "C"
+
+
 def autostart_enabled():
     try:
         import winreg
@@ -343,7 +355,7 @@ def set_autostart(enabled):
                 pass
 
 
-async def poll_device(mac, sync_requested):
+async def poll_device(mac, sync_requested, set_unit=None):
     got = asyncio.Event()
     result = {}
 
@@ -371,6 +383,10 @@ async def poll_device(mac, sync_requested):
         result["epoch"] = epoch
         result["tz"] = tz
         result["drift"] = drift
+        if set_unit:
+            payload = b"\x01" if set_unit == "f" else b"\xff"
+            await client.write_gatt_char(UUID_UNITS, payload, response=True)
+            result["unit_set"] = set_unit
         try:
             result["batt"] = (await client.read_gatt_char(UUID_BATT))[0]
         except Exception:
@@ -443,6 +459,7 @@ class App:
         self.settings = None
         self.wake = threading.Event()
         self.sync_flag = False
+        self.unit_flag = None
         self.stop = False
         self.ui_queue = queue.Queue()
 
@@ -509,7 +526,7 @@ class App:
         d = self.last_data
         if not d or "temp" not in d:
             return self.dash_row("temp")
-        return f"{L('temp')}: {d['temp']:.1f} °C"
+        return f"{L('temp')}: {display_temp(d['temp']):.1f} °{unit_letter()}"
 
     def row_humi(self):
         d = self.last_data
@@ -548,12 +565,16 @@ class App:
         while not self.stop:
             sync = self.sync_flag
             self.sync_flag = False
+            unit = self.unit_flag
+            self.unit_flag = None
             mac = device_mac()
             if mac:
                 try:
-                    data = asyncio.run(poll_device(mac, sync))
+                    data = asyncio.run(poll_device(mac, sync, unit))
                     self.apply_data(data)
                 except Exception as exc:
+                    if unit:
+                        self.unit_flag = unit
                     self.apply_error(str(exc))
             else:
                 self.last_status = ("nodev",)
@@ -598,11 +619,11 @@ class App:
             else:
                 self.icon.icon = make_image("face", happy=self.comfort_ok)
         elif mode == "temp":
-            self.icon.icon = make_image(f"{round(d['temp'])}°")
+            self.icon.icon = make_image(f"{round(display_temp(d['temp']))}°")
         else:
             self.icon.icon = make_image(f"{d['humi']}%")
         if d and "temp" in d:
-            title = f"{d['temp']:.1f}°, {d['humi']}% {face_glyph(self.comfort_ok)}"
+            title = f"{display_temp(d['temp']):.1f}°, {d['humi']}% {face_glyph(self.comfort_ok)}"
             if d.get("batt") is not None:
                 title += f" · {L('batt')}: {d['batt']}%"
             self.icon.title = title[:127]
@@ -612,6 +633,12 @@ class App:
             self.icon.update_menu()
         except Exception:
             pass
+
+    def request_unit(self):
+        self.unit_flag = config.get("unit", "c")
+        self.last_status = ("updating",)
+        self.refresh_tray()
+        self.wake.set()
 
     def request_sync(self):
         self.sync_flag = True
@@ -736,6 +763,21 @@ class App:
 
         tray_combo.bind("<<ComboboxSelected>>", on_tray)
 
+        ttk.Label(frame, text=L("unit")).grid(row=6, column=0, sticky="w", pady=4)
+        unit_combo = ttk.Combobox(frame, state="readonly", values=["°C", "°F"], width=6)
+        unit_combo.current(1 if config.get("unit") == "f" else 0)
+        unit_combo.grid(row=6, column=1, sticky="w", pady=4)
+
+        def on_unit(_):
+            value = "f" if unit_combo.current() == 1 else "c"
+            if value != config.get("unit"):
+                config["unit"] = value
+                save_config()
+                self.request_unit()
+                note_var.set(L("sync_requested"))
+
+        unit_combo.bind("<<ComboboxSelected>>", on_unit)
+
         auto_var = tk.BooleanVar(value=autostart_enabled())
 
         def on_autostart():
@@ -745,7 +787,7 @@ class App:
                 pass
 
         ttk.Checkbutton(frame, text=L("autostart"), variable=auto_var, command=on_autostart).grid(
-            row=6, column=0, columnspan=2, sticky="w", pady=4
+            row=7, column=0, columnspan=2, sticky="w", pady=4
         )
 
         sync_var = tk.BooleanVar(value=bool(config.get("autosync")))
@@ -755,7 +797,7 @@ class App:
             save_config()
 
         ttk.Checkbutton(frame, text=L("autosync"), variable=sync_var, command=on_autosync).grid(
-            row=7, column=0, columnspan=2, sticky="w", pady=4
+            row=8, column=0, columnspan=2, sticky="w", pady=4
         )
 
         note_var = tk.StringVar(value="")
@@ -765,10 +807,10 @@ class App:
             note_var.set(L("sync_requested"))
 
         ttk.Button(frame, text=L("sync_now"), command=on_sync).grid(
-            row=8, column=0, columnspan=2, sticky="ew", pady=6
+            row=9, column=0, columnspan=2, sticky="ew", pady=6
         )
         ttk.Label(frame, textvariable=note_var, foreground="#777777").grid(
-            row=9, column=0, columnspan=2, sticky="w"
+            row=10, column=0, columnspan=2, sticky="w"
         )
 
     def open_scan(self, parent, device_btn):
@@ -837,7 +879,22 @@ class App:
         threading.Thread(target=scan_worker, daemon=True).start()
 
 
+def acquire_lock():
+    import msvcrt
+
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    lock = open(os.path.join(os.path.dirname(CONFIG_PATH), "lock"), "w")
+    try:
+        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        return None
+    return lock
+
+
 def main():
+    lock = acquire_lock()
+    if lock is None:
+        return
     app = App()
     threading.Thread(target=app.icon.run, daemon=True).start()
     app.root.after(100, app.pump)

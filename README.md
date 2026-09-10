@@ -80,6 +80,7 @@ The Settings item (a window on Linux/Windows, dropdown submenus on macOS):
 - **Language** — Russian or English, applied instantly
 - **Device** — discovery: the widget scans the air and lists found devices with address and signal level; picking one selects it and polls it right away
 - **Poll** — polling period in minutes
+- **Units** — °C or °F: written to the clock itself (its e-ink display switches) and applied to all widget readouts
 - **Time zone** — "System" or a fixed offset in the "(UTC+03:00) Moscow, Istanbul, Riyadh" format, fractional zones included; written to the clock on sync
 - **Face** — emoji or text, like on the clock
 - **Tray** — what to show in the panel / menu bar

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import fcntl
 import json
 import os
 import shutil
@@ -34,6 +35,7 @@ DEVICE_NAMES = ("LYWSD02", "MHO-C303")
 UUID_TIME = "EBE0CCB7-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_DATA = "EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_BATT = "EBE0CCC4-7A0A-4B0C-8A1A-6FF2997DA3A6"
+UUID_UNITS = "EBE0CCBE-7A0A-4B0C-8A1A-6FF2997DA3A6"
 CONFIG_PATH = os.path.join(GLib.get_user_config_dir(), "lywsd02-widget", "config.json")
 AUTOSTART_PATH = os.path.join(GLib.get_user_config_dir(), "autostart", "lywsd02-widget.desktop")
 
@@ -75,6 +77,7 @@ STRINGS = {
         "scan_none": "Ничего не найдено. Поднесите часы ближе и попробуйте ещё раз",
         "scan_found": "Найдено",
         "poll": "Опрос, мин",
+        "unit": "Единицы",
         "tray_mode": "В трее",
         "tray_icon": "иконка",
         "tray_data": "данные",
@@ -120,6 +123,7 @@ STRINGS = {
         "scan_none": "Nothing found. Bring the clock closer and try again",
         "scan_found": "Found",
         "poll": "Poll, min",
+        "unit": "Units",
         "tray_mode": "Tray",
         "tray_icon": "icon",
         "tray_data": "data",
@@ -141,6 +145,7 @@ DEFAULTS = {
     "autosync": True,
     "face": "emoji",
     "tray": "icon",
+    "unit": "c",
     "comfort": {"t_lo": 19.0, "t_hi": 27.0, "h_lo": 20.0, "h_hi": 85.0},
 }
 
@@ -337,7 +342,7 @@ def load_pil_font(size):
     return ImageFont.load_default()
 
 
-def render_clock_face(path, time_text, humi_text, temp_text, happy, out_w=440):
+def render_clock_face(path, time_text, humi_text, temp_text, happy, out_w=440, unit="C"):
     s = 3
     W, H = 480 * s, 238 * s
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -357,7 +362,7 @@ def render_clock_face(path, time_text, humi_text, temp_text, happy, out_w=440):
     dr.ellipse(
         [x + 2.5 * s, by + 15.5 * s, x + 5.3 * s, by + 18.3 * s], outline=INK, width=int(1.1 * s)
     )
-    dr.text((x + 6.5 * s, by + 14.5 * s), "C", font=load_pil_font(int(7 * s)), fill=INK)
+    dr.text((x + 6.5 * s, by + 14.5 * s), unit, font=load_pil_font(int(7 * s)), fill=INK)
 
     if happy is not None:
         draw_screen_face(dr, 333 * s, by, 21 * s, 2.5 * s, happy)
@@ -421,6 +426,14 @@ def build_tray_svg(text, face_kind, clock=False):
             )
     parts.append("</g></svg>")
     return "".join(parts)
+
+
+def display_temp(celsius):
+    return celsius * 9 / 5 + 32 if config.get("unit") == "f" else celsius
+
+
+def unit_letter():
+    return "F" if config.get("unit") == "f" else "C"
 
 
 def face_glyph(happy):
@@ -628,7 +641,7 @@ def set_autostart(enabled):
             pass
 
 
-async def poll_device(mac, sync_requested):
+async def poll_device(mac, sync_requested, set_unit=None):
     got = asyncio.Event()
     result = {}
 
@@ -656,6 +669,10 @@ async def poll_device(mac, sync_requested):
         result["epoch"] = epoch
         result["tz"] = tz
         result["drift"] = drift
+        if set_unit:
+            payload = b"\x01" if set_unit == "f" else b"\xff"
+            await client.write_gatt_char(UUID_UNITS, payload, response=True)
+            result["unit_set"] = set_unit
         try:
             result["batt"] = (await client.read_gatt_char(UUID_BATT))[0]
         except Exception:
@@ -727,7 +744,15 @@ class SettingsWindow(Gtk.Window):
         grid.attach(Gtk.Label(label=L("poll"), xalign=0), 0, 5, 1, 1)
         grid.attach(poll_spin, 1, 5, 1, 1)
 
-        for combo in (lang_combo, face_combo, tray_combo):
+        unit_combo = Gtk.ComboBoxText()
+        unit_combo.append("c", "°C")
+        unit_combo.append("f", "°F")
+        unit_combo.set_active_id("f" if config.get("unit") == "f" else "c")
+        unit_combo.connect("changed", self.on_unit)
+        grid.attach(Gtk.Label(label=L("unit"), xalign=0), 0, 6, 1, 1)
+        grid.attach(unit_combo, 1, 6, 1, 1)
+
+        for combo in (lang_combo, face_combo, tray_combo, unit_combo):
             for cell in combo.get_cells():
                 cell.set_property("xalign", 0)
         css = Gtk.CssProvider()
@@ -743,20 +768,20 @@ class SettingsWindow(Gtk.Window):
         autostart_check = Gtk.CheckButton(label=L("autostart"))
         autostart_check.set_active(autostart_enabled())
         autostart_check.connect("toggled", self.on_autostart)
-        grid.attach(autostart_check, 1, 6, 1, 1)
+        grid.attach(autostart_check, 1, 7, 1, 1)
 
         autosync_check = Gtk.CheckButton(label=L("autosync"))
         autosync_check.set_active(bool(config.get("autosync")))
         autosync_check.connect("toggled", self.on_autosync)
-        grid.attach(autosync_check, 1, 7, 1, 1)
+        grid.attach(autosync_check, 1, 8, 1, 1)
 
         sync_btn = Gtk.Button(label=L("sync_now"))
         sync_btn.connect("clicked", self.on_sync)
-        grid.attach(sync_btn, 0, 8, 2, 1)
+        grid.attach(sync_btn, 0, 9, 2, 1)
 
         self.note = Gtk.Label(label="", xalign=0)
         self.note.get_style_context().add_class("dim-label")
-        grid.attach(self.note, 0, 9, 2, 1)
+        grid.attach(self.note, 0, 10, 2, 1)
 
     def on_lang(self, combo):
         lid = combo.get_active_id()
@@ -778,9 +803,10 @@ class SettingsWindow(Gtk.Window):
                     self.clock_path,
                     watch.strftime("%H:%M"),
                     str(d["humi"]),
-                    f"{d['temp']:.1f}",
+                    f"{display_temp(d['temp']):.1f}",
                     self.app.comfort_ok,
                     out_w=220,
+                    unit=unit_letter(),
                 )
             else:
                 render_clock_face(self.clock_path, "--:--", "--", "--.-", None, out_w=220)
@@ -934,6 +960,14 @@ class SettingsWindow(Gtk.Window):
         config["poll"] = spin.get_value_as_int() * 60
         save_config()
 
+    def on_unit(self, combo):
+        value = "f" if combo.get_active_id() == "f" else "c"
+        if value != config.get("unit"):
+            config["unit"] = value
+            save_config()
+            self.app.request_unit()
+            self.note.set_label(L("sync_requested"))
+
     def on_face(self, combo):
         config["face"] = combo.get_active_id()
         save_config()
@@ -1008,6 +1042,7 @@ class Widget:
 
         self.wake = threading.Event()
         self.sync_flag = False
+        self.unit_flag = None
         self.stop = False
         self.worker = threading.Thread(target=self.worker_loop, daemon=True)
         self.worker.start()
@@ -1029,12 +1064,16 @@ class Widget:
         while not self.stop:
             sync = self.sync_flag
             self.sync_flag = False
+            unit = self.unit_flag
+            self.unit_flag = None
             mac = device_mac()
             if mac:
                 try:
-                    data = asyncio.run(poll_device(mac, sync))
+                    data = asyncio.run(poll_device(mac, sync, unit))
                     GLib.idle_add(self.apply_data, data)
                 except Exception as exc:
+                    if unit:
+                        self.unit_flag = unit
                     GLib.idle_add(self.apply_error, str(exc))
             else:
                 GLib.idle_add(self.apply_no_device)
@@ -1056,7 +1095,9 @@ class Widget:
             self.rows["time"].set_label(f"{L('time')}: {watch.strftime('%H:%M:%S')}")
             self.rows["drift"].set_label(f"{L('drift')}: {d['drift']:+d} {L('sec')}")
             if "temp" in d:
-                self.rows["temp"].set_label(f"{L('temp')}: {d['temp']:.1f} °C")
+                self.rows["temp"].set_label(
+                    f"{L('temp')}: {display_temp(d['temp']):.1f} °{unit_letter()}"
+                )
                 self.rows["humi"].set_label(f"{L('humi')}: {d['humi']}%")
                 t_lo, t_hi, h_lo, h_hi = comfort_range()
                 problems = []
@@ -1097,7 +1138,7 @@ class Widget:
         d = self.last_data
         mode = config.get("tray")
         if mode in TRAY_MODES and mode != "icon" and d and "temp" in d:
-            temp = f"{d['temp']:.1f}°"
+            temp = f"{display_temp(d['temp']):.1f}°"
             humi = f"{d['humi']}%"
             text = {
                 "data": f"{temp}, {humi}",
@@ -1155,6 +1196,12 @@ class Widget:
         self.render()
         return False
 
+    def request_unit(self):
+        self.unit_flag = config.get("unit", "c")
+        self.last_status = ("updating",)
+        self.render()
+        self.wake.set()
+
     def request_sync(self):
         self.sync_flag = True
         self.last_status = ("updating",)
@@ -1183,7 +1230,21 @@ class Widget:
         Gtk.main_quit()
 
 
+def acquire_lock():
+    os.makedirs(ICON_DIR, exist_ok=True)
+    lock = open(os.path.join(ICON_DIR, "lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return lock
+
+
 def main():
+    lock = acquire_lock()
+    if lock is None:
+        print("lywsd02-widget is already running", flush=True)
+        return None
     GLib.set_prgname("lywsd02-widget")
     GLib.set_application_name("LYWSD02 Widget")
     widget = Widget()

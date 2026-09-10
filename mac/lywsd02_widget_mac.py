@@ -1,4 +1,5 @@
 import asyncio
+import fcntl
 import json
 import os
 import plistlib
@@ -21,6 +22,7 @@ DEVICE_NAMES = ("LYWSD02", "MHO-C303")
 UUID_TIME = "EBE0CCB7-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_DATA = "EBE0CCC1-7A0A-4B0C-8A1A-6FF2997DA3A6"
 UUID_BATT = "EBE0CCC4-7A0A-4B0C-8A1A-6FF2997DA3A6"
+UUID_UNITS = "EBE0CCBE-7A0A-4B0C-8A1A-6FF2997DA3A6"
 APP_SUPPORT = os.path.expanduser("~/Library/Application Support/lywsd02-widget")
 CONFIG_PATH = os.path.join(APP_SUPPORT, "config.json")
 LAUNCH_AGENT = os.path.expanduser("~/Library/LaunchAgents/org.lywsd02.widget.plist")
@@ -61,6 +63,7 @@ STRINGS = {
         "scan_none": "Ничего не найдено",
         "poll": "Опрос",
         "min": "мин",
+        "unit": "Единицы",
         "tray_mode": "В строке меню",
         "tray_icon": "иконка",
         "tray_data": "данные",
@@ -104,6 +107,7 @@ STRINGS = {
         "scan_none": "Nothing found",
         "poll": "Poll",
         "min": "min",
+        "unit": "Units",
         "tray_mode": "Menu bar",
         "tray_icon": "icon",
         "tray_data": "data",
@@ -231,6 +235,7 @@ DEFAULTS = {
     "autosync": True,
     "face": "emoji",
     "tray": "icon",
+    "unit": "c",
     "comfort": {"t_lo": 19.0, "t_hi": 27.0, "h_lo": 20.0, "h_hi": 85.0},
 }
 
@@ -317,6 +322,14 @@ def face_glyph(happy):
     return FACES["happy" if happy else "sad"][style]
 
 
+def display_temp(celsius):
+    return celsius * 9 / 5 + 32 if config.get("unit") == "f" else celsius
+
+
+def unit_letter():
+    return "F" if config.get("unit") == "f" else "C"
+
+
 def autostart_enabled():
     return os.path.exists(LAUNCH_AGENT)
 
@@ -338,7 +351,7 @@ def set_autostart(enabled):
             pass
 
 
-async def poll_device(mac, sync_requested):
+async def poll_device(mac, sync_requested, set_unit=None):
     got = asyncio.Event()
     result = {}
 
@@ -366,6 +379,10 @@ async def poll_device(mac, sync_requested):
         result["epoch"] = epoch
         result["tz"] = tz
         result["drift"] = drift
+        if set_unit:
+            payload = b"\x01" if set_unit == "f" else b"\xff"
+            await client.write_gatt_char(UUID_UNITS, payload, response=True)
+            result["unit_set"] = set_unit
         try:
             result["batt"] = (await client.read_gatt_char(UUID_BATT))[0]
         except Exception:
@@ -434,6 +451,7 @@ class TrayApp(rumps.App):
         self.scan_results = []
         self.wake = threading.Event()
         self.sync_flag = False
+        self.unit_flag = None
         self.icon_file = menubar_icon_path()
         self.rebuild_menu()
         self.timer = rumps.Timer(self.on_tick, 1)
@@ -522,6 +540,13 @@ class TrayApp(rumps.App):
             tray_menu.add(item)
         settings.add(tray_menu)
 
+        unit_menu = rumps.MenuItem(L("unit"))
+        for uid, title in (("c", "°C"), ("f", "°F")):
+            item = rumps.MenuItem(title, callback=self.make_unit_setter(uid))
+            item.state = 1 if config.get("unit", "c") == uid else 0
+            unit_menu.add(item)
+        settings.add(unit_menu)
+
         autostart_item = rumps.MenuItem(L("autostart"), callback=self.on_autostart)
         autostart_item.state = 1 if autostart_enabled() else 0
         settings.add(autostart_item)
@@ -551,6 +576,22 @@ class TrayApp(rumps.App):
             self.on_refresh(None)
 
         return handler
+
+    def make_unit_setter(self, value):
+        def handler(_):
+            if value != config.get("unit"):
+                config["unit"] = value
+                save_config()
+                self.rebuild_menu()
+                self.request_unit()
+
+        return handler
+
+    def request_unit(self):
+        self.unit_flag = config.get("unit", "c")
+        self.last_status = ("updating",)
+        self.dirty = True
+        self.wake.set()
 
     def make_tz_setter(self, value):
         def handler(_):
@@ -624,12 +665,16 @@ class TrayApp(rumps.App):
         while True:
             sync = self.sync_flag
             self.sync_flag = False
+            unit = self.unit_flag
+            self.unit_flag = None
             mac = device_mac()
             if mac:
                 try:
-                    data = asyncio.run(poll_device(mac, sync))
+                    data = asyncio.run(poll_device(mac, sync, unit))
                     self.apply_data(data)
                 except Exception:
+                    if unit:
+                        self.unit_flag = unit
                     self.last_status = ("error", datetime.now().strftime("%H:%M:%S"))
                     self.dirty = True
             else:
@@ -673,7 +718,9 @@ class TrayApp(rumps.App):
             self.rows["time"].title = f"{L('time')}: {watch.strftime('%H:%M:%S')}"
             self.rows["drift"].title = f"{L('drift')}: {d['drift']:+d} {L('sec')}"
             if "temp" in d:
-                self.rows["temp"].title = f"{L('temp')}: {d['temp']:.1f} °C"
+                self.rows["temp"].title = (
+                    f"{L('temp')}: {display_temp(d['temp']):.1f} °{unit_letter()}"
+                )
                 self.rows["humi"].title = f"{L('humi')}: {d['humi']}%"
                 face = face_glyph(self.comfort_ok)
                 detail = ", ".join(self.problems) if self.problems else L("comfortable")
@@ -709,7 +756,7 @@ class TrayApp(rumps.App):
                 self.icon = None
                 self.title = "LYWSD02"
             return
-        temp = f"{d['temp']:.1f}°"
+        temp = f"{display_temp(d['temp']):.1f}°"
         humi = f"{d['humi']}%"
         face = face_glyph(self.comfort_ok)
         text = {
@@ -723,7 +770,20 @@ class TrayApp(rumps.App):
         self.title = text
 
 
+def acquire_lock():
+    os.makedirs(APP_SUPPORT, exist_ok=True)
+    lock = open(os.path.join(APP_SUPPORT, "lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return lock
+
+
 def main():
+    lock = acquire_lock()
+    if lock is None:
+        return
     TrayApp().run()
 
 
