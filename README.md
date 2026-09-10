@@ -4,7 +4,7 @@
 
 Cross-platform tray / menu bar widget for the Xiaomi LYWSD02MMC clock-hygrometer. Runs on **Linux** (Ubuntu/GNOME), **Windows** and **macOS**, talks to the clock over Bluetooth LE and shows:
 
-<img alt="Settings" src="docs/settings-en.png" />
+<img width="1232" height="1310" alt="Screenshot From 2026-09-10 20-08-05" src="https://github.com/user-attachments/assets/2aa8717a-8979-4eb0-b8d7-0eccfe389351" />
 
 - clock time and its drift from system time, with automatic and manual time sync
 - temperature
