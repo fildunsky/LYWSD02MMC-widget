@@ -4,7 +4,7 @@
 
 Кроссплатформенный виджет для трея / строки меню, показывающий данные часов-гигрометра Xiaomi LYWSD02MMC. Работает на **Linux** (Ubuntu/GNOME), **Windows** и **macOS**, связывается с часами по Bluetooth LE и показывает:
 
-<img alt="Настройки" src="docs/settings-ru.png" />
+<img width="1232" height="1310" alt="Screenshot From 2026-09-10 20-07-53" src="https://github.com/user-attachments/assets/855b04c6-d1b0-4fc5-9dc8-3106f21a3e60" />
 
 - время на часах и его расхождение с системным, авто- и ручную синхронизацию
 - температуру
